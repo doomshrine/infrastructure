@@ -1,0 +1,16 @@
+¯\_(ツ)_/¯:
+  name: ¯\_(ツ)_/¯
+  color: f9d0c4
+  description: ¯\\\_(ツ)_/¯
+bug:
+  name: bug
+  color: d73a4a
+  description: Something isn't working as expected
+enhancement:
+  name: enhancement
+  color: 0dd8ac
+  description: New feature or improvement request
+documentation:
+  name: documentation
+  color: 007bc7
+  description: Issues related to documentation
