@@ -1,0 +1,46 @@
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v2.1.1
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: check-json
+        stages: [commit]
+      - id: check-toml
+        stages: [commit]
+      - id: check-yaml
+        stages: [commit]
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.8.0
+    hooks:
+      - id: shellcheck
+        stages: [commit]
+  - repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+      - id: black
+        stages: [commit]
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        stages: [commit]
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.77.1
+    hooks:
+      - id: terraform_fmt
+        stages: [commit]
+      - id: terraform_tflint
+        stages: [commit]
+      - id: terraform_tfsec
+        stages: [commit]
+      - id: terraform_validate
+        stages: [commit]
+  - repo: https://github.com/cisagov/pre-commit-packer
+    rev: v0.0.2
+    hooks:
+      - id: packer_fmt
+        stages: [commit]
