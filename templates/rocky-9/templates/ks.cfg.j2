@@ -1,0 +1,86 @@
+
+cdrom
+text
+skipx
+bootloader
+
+firewall --disabled
+selinux --disabled
+firstboot --disabled
+
+lang en_US.UTF-8
+keyboard us
+timezone Europe/Warsaw
+
+zerombr
+autopart --type=plain
+
+rootpw packer
+authselect --enableshadow --passalgo=sha512
+user --name=packer --groups=users --password=packer
+
+reboot
+
+%packages --ignoremissing
+openssh-clients
+kernel-headers
+kernel-devel
+wget
+curl
+bzip2
+dkms
+patch
+net-tools
+sudo
+sshpass
+selinux-policy-devel
+iproute-tc
+
+-fprintd-pam
+-intltool
+-microcode_ctl
+
+-alsa-tools-firmware
+-atmel-firmware
+-b43-openfwwf
+-bfa-firmware
+-ipw*-firmware
+-irqbalance
+-ivtv-firmware
+-iwl*-firmware
+-kernel-firmware
+-libertas-usb8388-firmware
+-ql*-firmware
+-rt61pci-firmware
+-rt73usb-firmware
+-xorg-x11-drv-ati-firmware
+-zd1211-firmware
+
+-dracut-config-rescue
+%end
+
+%post
+
+echo "Starting postinstall"
+echo 'packer ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/packer
+chmod 440 /etc/sudoers.d/packer
+
+yum install -y \
+    perl \
+    dnf-automatic \
+    {% if platform == "xcp-ng" %}xe-guest-utilities-latest{% elif platform == "pve" %}qemu-guest-agent{% endif %}
+
+sed -i 's/.*PermitRootLogin .*/PermitRootLogin yes/g' /etc/ssh/sshd_config
+
+systemctl enable dnf-automatic-install
+systemctl start dnf-automatic-install
+
+{% if platform == "xcp-ng" -%}
+systemctl enable xe-linux-distribution
+systemctl start xe-linux-distribution
+{% elif platform == "pve" -%}
+systemctl enable qemu-guest-agent
+systemctl start qemu-guest-agent
+{%- endif %}
+
+%end

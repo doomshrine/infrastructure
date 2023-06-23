@@ -1,0 +1,19 @@
+# http routing section
+http:
+  routers:
+    # Define a connection between requests and services
+    k3s:
+      entrypoints: kubernetes
+      rule: "Method(`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`)"
+      service: k3s
+      tls:
+        certresolver: le
+
+  services:
+    # Define how to reach an existing service on our infrastructure
+    k3s:
+      loadBalancer:
+        servers:
+          - url: https://172.16.2.1:6443
+          - url: https://172.16.2.2:6443
+          - url: https://172.16.2.3:6443

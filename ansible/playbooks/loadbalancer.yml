@@ -1,0 +1,111 @@
+- name: Install and configure Load Balancer on the host
+  hosts: loadbalancer
+  become: true
+
+  vars:
+    pip_install_packages:
+      - name: docker
+
+  roles:
+    - geerlingguy.pip
+    - geerlingguy.docker
+
+  tasks:
+    - name: Check if the 'subnet' is defined
+      when: subnet is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'subnet'
+    - name: Check if the 'gateway' is defined
+      when: gateway is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'gateway'
+    - name: Check if the 'interface' is defined
+      when: interface is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'interface'
+    - name: Check if the 'netmask' is defined
+      when: netmask is not defined and static_route is defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'netmask'
+    - name: Check if control-planes are defined
+      when: |
+        controlplane1 is not defined or
+        controlplane2 is not defined or
+        controlplane3 is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'controlplane1', 'controlplane2', 'controlplane3'
+
+    - name: Set static route to subnet
+      become: true
+      ansible.builtin.command:
+        cmd: 'nmcli connection modify {{ interface }} +ipv4.routes "{{ subnet }} {{ gateway }}"'
+      ignore_errors: true
+
+    - name: Create persistent data directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: 0755
+        recurse: true
+      loop:
+        - /etc/haproxy
+
+    - name: Copy configuration files
+      ansible.builtin.copy:
+        content: |
+          global
+              maxconn 10000
+          defaults
+              maxconn 10000
+              mode    tcp
+              option  dontlognull
+              timeout http-request 10s
+              timeout queue        1m
+              timeout connect      10s
+              timeout client       86400s
+              timeout server       86400s
+              timeout tunnel       86400s
+          frontend k8s-api
+              bind :::6443 v4v6
+              mode tcp
+              default_backend k8s-api
+          backend k8s-api
+              balance roundrobin
+              mode tcp
+              option tcp-check
+              default-server inter 10s downinter 5s rise 2 fall 2 slowstart 60s maxconn 250 maxqueue 256 weight 100
+              server k8s-1 {{ controlplane1 }}:6443 check
+              server k8s-2 {{ controlplane2 }}:6443 check
+              server k8s-3 {{ controlplane3 }}:6443 check
+        dest: "/etc/haproxy/haproxy.cfg"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+
+    - name: Create directory for storing docker-compose files
+      ansible.builtin.file:
+        path: "/etc/ansible/templates/{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0755
+        recurse: true
+      loop:
+        - haproxy
+
+    - name: Copy docker-compose files from local to remote
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}/docker-compose.yml"
+        dest: "/etc/ansible/templates/{{ item }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - haproxy
+
+    - name: Start all docker-compose services
+      ansible.builtin.command:
+        chdir: "/etc/ansible/templates/{{ item }}"
+        cmd: docker compose up -d
+      loop:
+        - haproxy

@@ -1,0 +1,10 @@
+- name: Configure PFsense
+  hosts: pfsense
+
+  tasks:
+    - name: Install packages
+      pfsense.core.package:
+        name:
+          - frr
+          - tailscale
+        state: present

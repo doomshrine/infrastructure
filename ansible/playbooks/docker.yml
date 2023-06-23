@@ -1,0 +1,64 @@
+- hosts: dockerhost
+  become: true
+
+  vars:
+    pip_install_packages:
+      - name: docker
+
+  roles:
+    - geerlingguy.pip
+    - geerlingguy.docker
+
+  tasks:
+    - name: Check if shoutrrr_notifications_url is defined
+      when: shoutrrr_notifications_url is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'shoutrrr_notifications_url'
+
+    - name: Write /etc/global.env file with the following contents
+      ansible.builtin.copy:
+        content: |
+          ARCH={{ ansible_architecture }}
+          HOSTNAME={{ inventory_hostname }}
+          OS={{ ansible_distribution }}
+          OS_VERSION={{ ansible_distribution_version }}
+
+          # watchtower
+          WATCHTOWER_NOTIFICATIONS_HOSTNAME={{ inventory_hostname }}
+          WATCHTOWER_NOTIFICATION_URL={{ shoutrrr_discord_url }}
+
+        dest: /etc/global.env
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Create directory for storing docker-compose files
+      ansible.builtin.file:
+        path: "/etc/ansible/templates/{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0755
+        recurse: true
+      loop:
+        - watchtower
+        - portainer_agent
+
+    - name: Copy docker-compose files from local to remote
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}/docker-compose.yml"
+        dest: "/etc/ansible/templates/{{ item }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - watchtower
+        - portainer_agent
+
+    - name: Start all docker-compose services
+      ansible.builtin.command:
+        chdir: "/etc/ansible/templates/{{ item }}"
+        cmd: docker compose up -d
+      loop:
+        - watchtower
+        - portainer_agent

@@ -1,0 +1,142 @@
+#!/usr/bin/env -S just --justfile
+# Shebang above is not necessary, but it allows you to run this file directly
+
+PKR_VARIABLES := "${HOME}/.config/packer/variables.pkrvars.hcl"
+PACKER_BIN := "$(which packer.io || which packer || echo 'packer')"
+PKR_CONFIG := "img.pkr.hcl"
+
+# Check if all dependencies are installed
+dependencies:
+    @just _check {{PACKER_BIN}}
+    @just _check python3
+    @just _check pip3
+    @just _check losetup
+    @just _check mount
+
+_check DEPENDENCY:
+    #!/usr/bin/env bash
+    set -e
+
+    if ! command -v tput > /dev/null 2>&1; then
+        _COLOR_NC=''
+        _COLOR_RED=''
+    else
+        _COLOR_NC="$(tput sgr0)"
+        _COLOR_RED="$(tput setaf 1)"
+    fi
+
+    FAIL=0
+    if ! command -v {{DEPENDENCY}} > /dev/null 2>&1; then
+        printf "  - [ ] {{DEPENDENCY}} ${_COLOR_RED}not found, please install it!${_COLOR_NC}\n"
+        FAIL=1
+    else
+        printf "  - [x] {{DEPENDENCY}}\n"
+    fi
+
+    if [ $FAIL -eq 1 ]; then
+        exit 1
+    fi
+
+# Clean up the build directory
+clean TARGET:
+    rm -rf {{TARGET}}/generated
+
+# Build the image
+build TARGET: dependencies
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    just clean {{TARGET}}
+    just _before {{TARGET}}
+    just _generate {{TARGET}}
+
+    cd {{TARGET}}
+
+    {{PACKER_BIN}} init {{PKR_CONFIG}} && \
+    {{PACKER_BIN}} build \
+        -force \
+        -var-file {{PKR_VARIABLES}} \
+        {{PKR_CONFIG}}
+
+    cd ..
+
+    just _finalize {{TARGET}}
+
+_generate TARGET:
+    #!/usr/bin/env bash
+    set -e
+
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    if [ ! -f "{{TARGET}}/scripts/generator.py" ]; then
+        echo "No generate.py to run, skipping...";
+        exit 0;
+    fi;
+
+    if [[ ! -d "./venv" ]];
+        then python3 -m venv venv;
+    fi;
+
+    . ./venv/bin/activate;
+    python3 -m pip install -r requirements.txt;
+
+    cd {{TARGET}}
+
+    mkdir -p ./generated
+
+    python3 ./scripts/generator.py {{PKR_CONFIG}}
+
+_before TARGET:
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    cd {{TARGET}}
+
+    if [ -f "./scripts/before-script.sh" ]; then
+        ./scripts/before-script.sh;
+    else
+        echo "No before-script to run, skipping...";
+    fi;
+
+_iso TARGET:
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    cd {{TARGET}}
+
+    if [ -f "./scripts/iso.sh" ]; then
+        ./scripts/iso.sh;
+    else
+        echo "No iso to run, skipping...";
+    fi;
+
+_finalize TARGET:
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    cd {{TARGET}}
+
+    if [ -f "./scripts/finalize.sh" ]; then
+        ./scripts/finalize.sh;
+    else
+        echo "No finalize to run, skipping...";
+    fi;

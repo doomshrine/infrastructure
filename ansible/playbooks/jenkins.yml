@@ -1,0 +1,179 @@
+- hosts: jenkins
+  become: true
+  tasks:
+    - name: Install required system packages
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.yum:
+        name:
+          - yum-utils
+        state: latest
+
+- hosts: jenkins
+  become: true
+  tasks:
+    - name: Install required system packages
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.yum:
+        name:
+          - java-11-openjdk
+          - python3
+          - python3-pip
+        state: latest
+        update_cache: true
+
+    - name: Add Jenkins Repository
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+
+    - name: Add Jenkins GPG Key
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.rpm_key:
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+        state: present
+
+    - name: Install Jenkins and all components
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.yum:
+        name:
+          - jenkins
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt:
+        name:
+          - openjdk-11-jdk
+          - python3
+          - python3-pip
+        state: latest
+        update_cache: true
+
+    - name: Add Jenkins GPG Key
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins Repository
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/
+        state: present
+
+    - name: Install Jenkins and all components
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt:
+        name:
+          - jenkins
+        state: latest
+        update_cache: true
+
+    - name: Ensure that Jenkins daemon is running
+      ansible.builtin.service:
+        name: jenkins
+        enabled: true
+        state: started
+
+- hosts: jenkins
+  become: true
+  tasks:
+    - name: Install required system packages
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.yum:
+        name:
+          - ansible-core
+          - util-linux-core # for losetup
+          - util-linux      # for fdisk
+          - e2fsprogs       # for resize2fs
+          - parted
+          - git
+          - golang
+          - python3
+          - python3-pip
+        state: latest
+        update_cache: true
+
+    - name: Install qemu-user-static
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.get_url:
+        url: https://github.com/multiarch/qemu-user-static/releases/latest/download/{{ item }}
+        dest: /usr/bin/{{ item }}
+        mode: 0755
+      loop:
+        - qemu-aarch64-static
+        - qemu-arm-static
+        - qemu-i386-static
+        - qemu-ppc64-static
+        - qemu-ppc64le-static
+        - qemu-mips64-static
+        - qemu-s390x-static
+        - qemu-riscv64-static
+
+    - name: Install required system packages
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt:
+        name:
+          - ansible
+          - util-linux # for losetup
+          - fdisk      # for fdisk
+          - e2fsprogs  # for resize2fs
+          - parted
+          - git
+          - golang
+          - python3
+          - python3-pip
+          - python3-venv
+          - qemu-user-static
+        state: latest
+        update_cache: true
+
+    - name: Install packer-builder-arm
+      ansible.builtin.shell:
+        cmd: go install github.com/mkaczanowski/packer-builder-arm@latest
+
+    - name: Link packer-builder-arm to global bin
+      ansible.builtin.copy:
+        remote_src: True
+        src: /root/go/bin/packer-builder-arm
+        dest: /usr/bin/packer-builder-arm
+        mode: 0755
+
+    - name: Add Hashicorp Repository
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.shell:
+        cmd: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+
+    - name: Install Packer
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.yum:
+        name:
+          - packer
+        state: latest
+        update_cache: true
+
+    - name: Add Hashicorp GPG Key
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+
+    - name: Add Hashicorp Repository
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.shell:
+        cmd: apt-add-repository --yes --update "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+
+    - name: Install Packer
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt:
+        name:
+          - packer
+        state: latest
+        update_cache: true
+
+    - name: Link /usr/bin/packer to /usr/bin/packer.io (to avoid conflict with /usr/sbin/packer)
+      ansible.builtin.file:
+        src: /usr/bin/packer
+        dest: /usr/bin/packer.io
+        state: link

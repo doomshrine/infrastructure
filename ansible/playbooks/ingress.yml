@@ -1,0 +1,85 @@
+- name: Configure ingress
+  hosts: ingress
+  become: true
+
+  tasks:
+    - name: Check if woodpecker_secret is defined
+      when: woodpecker_secret is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'woodpecker_secret'
+      
+    - name: Check if woodpecker_github_client is defined
+      when: woodpecker_github_client is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'woodpecker_github_client'
+      
+    - name: Check if woodpecker_github_secret is defined
+      when: woodpecker_github_secret is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'woodpecker_github_secret'
+
+    - name: Create directory for storing docker-compose files
+      ansible.builtin.file:
+        path: "/etc/ansible/templates/{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0755
+        recurse: true
+      loop:
+        - traefik
+        - woodpecker_server
+
+    - name: Copy docker-compose files from local to remote
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}/docker-compose.yml"
+        dest: "/etc/ansible/templates/{{ item }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - traefik
+        - woodpecker_server
+
+    - name: Create directory for storing config files
+      ansible.builtin.file:
+        path: "/etc/ansible/templates/{{ item }}/config"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0755
+        recurse: true
+      loop:
+        - traefik
+
+    - name: Copy traefik configuration files from local to remote
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}/config/traefik.toml"
+        dest: "/etc/ansible/templates/{{ item }}/config/traefik.toml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - traefik
+
+    - name: Write local.env file with the following contents
+      ansible.builtin.copy:
+        content: |
+          WOODPECKER_AGENT_SECRET={{ woodpecker_secret }}
+          WOODPECKER_GITHUB_CLIENT={{ woodpecker_github_client }}
+          WOODPECKER_GITHUB_SECRET={{ woodpecker_github_secret }}
+
+        dest: "/etc/ansible/templates/{{ item }}/local.env"
+        owner: root
+        group: root
+        mode: 0644
+      loop:
+        - woodpecker_server
+
+    - name: Start all docker-compose services
+      ansible.builtin.command:
+        chdir: "/etc/ansible/templates/{{ item }}"
+        cmd: docker compose up -d --force-recreate
+      loop:
+        - traefik
+        - woodpecker_server

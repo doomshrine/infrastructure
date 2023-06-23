@@ -1,0 +1,160 @@
+#!/usr/bin/env -S just --justfile
+# Shebang above is not necessary, but it allows you to run this file directly
+
+PLAYBOOKS := "./playbooks"
+# this is expanded only when the variable is used!
+ANSIBLE_USER := "${ANSIBLE_USER:-ansible}"
+
+# Check if all dependencies are installed
+dependencies:
+    @just _check ansible-playbook
+
+# List all available playbooks
+list_playbooks:
+    #!/usr/bin/env bash
+    set -e
+    printf "Playbooks:\n"
+    for playbook in $(ls {{PLAYBOOKS}} | sed 's/.yml//g' | xargs echo); do
+        printf "  - ${playbook}\n"
+    done
+
+_check DEPENDENCY:
+    #!/usr/bin/env bash
+    set -e
+
+    if ! command -v tput > /dev/null 2>&1; then
+        _COLOR_NC=''
+        _COLOR_RED=''
+    else
+        _COLOR_NC="$(tput sgr0)"
+        _COLOR_RED="$(tput setaf 1)"
+    fi
+
+    FAIL=0
+    if ! command -v {{DEPENDENCY}} > /dev/null 2>&1; then
+        printf "  - [ ] {{DEPENDENCY}} ${_COLOR_RED}not found, please install it!${_COLOR_NC}\n"
+        FAIL=1
+    else
+        printf "  - [x] {{DEPENDENCY}}\n"
+    fi
+
+    if [ $FAIL -eq 1 ]; then
+        exit 1
+    fi
+
+# Run a playbook for a specific target (asks for host group)
+play TARGET:
+    #!/usr/bin/env bash
+    set -e
+
+    printf "Host Group (one of [$(ls ./inventory | sed 's/.ini//g' | xargs echo)]): "
+    read INPUT
+
+    ansible-playbook {{PLAYBOOKS}}/{{TARGET}}.yml \
+        --user {{ANSIBLE_USER}} \
+        --key-file ~/.ssh/ansible \
+        --inventory "./inventory/${INPUT}.ini"
+
+# Run a special playbook for new hosts (asks for host group and password)
+new_host:
+    #!/usr/bin/env bash
+    set -e
+
+    # using printf instead of read -p because of shell compatibility
+    printf "Host Group (one of [$(ls ./inventory | sed 's/.ini//g' | xargs echo)]): "
+    read INPUT
+
+    ansible-playbook {{PLAYBOOKS}}/new-host.yml \
+        --user packer \
+        --key-file ~/.ssh/ansible \
+        --inventory "./inventory/${INPUT}.ini" \
+        --ask-pass
+
+# Build inventory file for k3s
+k3s_inventory:
+    #!/usr/bin/env bash
+    set -e
+
+    echo -n "Do you want to generate new inventory? (Y/n): "; read ANSWER
+    if [[ "$ANSWER" == "y" ]] || [[ "$ANSWER" == "Y" ]]; then
+        echo ""
+    else
+        exit 0
+    fi
+
+    echo -n "VM_1 (server 1) IP: "; read SERVER_1
+    echo -n "VM_2 (server 2) IP: "; read SERVER_2
+    echo -n "VM_3 (server 3) IP: "; read SERVER_3
+    echo -n "VM_4 (agent 1) IP: "; read AGENT_1
+    echo -n "VM_5 (agent 2) IP: "; read AGENT_2
+
+    cat > inventory/generated.ini << EOF
+    [new]
+    $SERVER_1 hostname=server-1.k3s.local ipv4=172.16.2.1
+    $SERVER_2 hostname=server-2.k3s.local ipv4=172.16.2.2
+    $SERVER_3 hostname=server-3.k3s.local ipv4=172.16.2.3
+    $AGENT_1 hostname=agent-1.k3s.local ipv4=172.16.2.4
+    $AGENT_2 hostname=agent-2.k3s.local ipv4=172.16.2.5
+
+    [new:vars]
+    new_user=ansible
+    netmask=12
+    gateway=172.16.0.1
+    interface=ens18
+    disk_device=/dev/sda
+    partition_number=3
+    partition_size=100
+    EOF
+
+# Run a special playbook for deploying MAAS
+maas: _maas_inventory
+    cd maas-ansible-playbook && ansible-playbook -i ../inventory/maas.ini site.yaml
+
+_maas_inventory:
+    #!/usr/bin/env bash
+    set -e
+
+    echo -n "MAAS version: "; read MAAS_VERSION
+    echo -n "MAAS Region Controller VM IP: "; read MAAS_REGIONCTL_IP
+    echo -n "MAAS Postgres Password (MUST NOT include @ character): "; read POSTGRES_PASSWORD
+    echo -n "MAAS Admin Username (default 'admin'): "; read MAAS_USERNAME
+    echo -n "MAAS Admin Password (default 'admin'): "; read MAAS_PASSWORD
+    echo -n "MAAS Admin Email (default 'admin@example.com'): "; read MAAS_EMAIL
+    echo -n "MAAS Admin ID (default 'admin'): "; read MAAS_ID
+
+    if [ -z $MAAS_USERNAME ]; then
+        MAAS_USERNAME='admin'
+    fi
+    if [ -z $MAAS_PASSWORD ]; then
+        MAAS_PASSWORD='admin'
+    fi
+    if [ -z $MAAS_EMAIL ]; then
+        MAAS_EMAIL='admin@example.com'
+    fi
+    if [ -z $MAAS_ID ]; then
+        MAAS_ID='admin'
+    fi
+
+    # exapnd variables
+    cat > inventory/maas.ini << EOF
+    ; generated DO-NOT EDIT!
+    [all]
+    [all:vars]
+    maas_version="$MAAS_VERSION"
+    maas_postgres_password="$POSTGRES_PASSWORD"
+    maas_installation_type="snap"
+    admin_username="$MAAS_USERNAME"
+    admin_password="$MAAS_PASSWORD"
+    admin_email="$MAAS_EMAIL"
+    admin_id="$MAAS_ID"
+    maas_url="http://${MAAS_REGIONCTL_IP}:5240/MAAS"
+
+    [maas_postgres]
+    $MAAS_REGIONCTL_IP ansible_user=packer ansible_password=packer
+
+    [maas_region_controller]
+    $MAAS_REGIONCTL_IP ansible_user=packer ansible_password=packer
+
+    [maas_rack_controller]
+    $MAAS_REGIONCTL_IP ansible_user=packer ansible_password=packer
+    EOF

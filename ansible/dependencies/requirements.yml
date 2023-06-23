@@ -1,0 +1,8 @@
+collections:
+  - name: community.docker
+  - name: pfsensible.core
+  - name: community.general
+
+roles:
+  - name: geerlingguy.pip
+  - name: geerlingguy.docker

@@ -1,0 +1,29 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Ensure that 'hostname' is defined
+      ansible.builtin.fail:
+        msg: "Bailing out. This play requires 'hostname'"
+      when: hostname is undefined
+
+    - name: Set default hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}"
+
+    - name: Install aptitude
+      ansible.builtin.apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      ansible.builtin.apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - raspberrypi-kernel-headers
+        state: latest
+        update_cache: true

@@ -1,0 +1,30 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Ensure that 'distro' is defined
+      ansible.builtin.fail:
+        msg: "Bailing out. This play requires 'distro'"
+      when: distro is undefined
+
+    - name: Ensure that 'release' is defined
+      ansible.builtin.fail:
+        msg: "Bailing out. This play requires 'release'"
+      when: release is undefined
+
+    - name: Add Pimox7 GPG apt Key
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/pimox/pimox7/master/KEY.gpg
+        dest: /usr/share/keyrings/pimox7.gpg
+
+    - name: Add Pimox7 Repository
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/usr/share/keyrings/pimox7.gpg] https://raw.githubusercontent.com/pimox/pimox7/master/ dev/
+        filename: pimox
+        state: present
+
+    - name: Update apt and install Pimox7
+      ansible.builtin.apt:
+        pkg: 
+          - proxmox-ve
+        state: latest
+        update_cache: true

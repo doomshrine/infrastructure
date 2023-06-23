@@ -1,0 +1,43 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  packages:
+    {% if platform == "xcp-ng" -%}
+      - xe-guest-utilities-latest
+    {% elif platform == "pve" -%}
+      - qemu-guest-agent
+    {%- endif %}
+
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+
+  user-data:
+    package_upgrade: true
+    timezone: Europe/Warsaw
+    users:
+      - name: packer
+        passwd: $6$xyz$JJbmTJ7EzYLxcBOnv3bwWLhpQZ.WuX8yJkNaLKgtS747n2zUNPh8LZKhQPBnLAptBG429x5r0RJ.ZFIXiIMPw/
+        groups: [adm, cdrom, dip, plugdev, lxd, sudo]
+        lock-passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+
+  network:
+    version: 2
+    renderer: networkd
+    ethernets:
+      default:
+        match:
+          name: e*
+        dhcp4: yes
+        dhcp-identifier: mac

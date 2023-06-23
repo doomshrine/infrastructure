@@ -1,0 +1,66 @@
+#!/usr/bin/env -S just --justfile
+# Shebang above is not necessary, but it allows you to run this file directly
+
+# this is expanded only when the variable is used!
+TF_VARIABLES := "${HOME}/.config/terraform/variables.tfvars"
+TF_CONFIG := "pve.tf"
+TF_PLAN := "pve.tf.plan"
+# this is expanded only when the variable is used!
+TERRAFORM_BIN := "$(which terraform)"
+
+# Check if all dependencies are installed
+dependencies:
+    @just _check {{TERRAFORM_BIN}}
+    @just _check python3
+    @just _check pip3
+
+_check DEPENDENCY:
+    #!/usr/bin/env bash
+    set -e
+
+    if ! command -v tput > /dev/null 2>&1; then
+        _COLOR_NC=''
+        _COLOR_RED=''
+    else
+        _COLOR_NC="$(tput sgr0)"
+        _COLOR_RED="$(tput setaf 1)"
+    fi
+
+    FAIL=0
+    if ! command -v {{DEPENDENCY}} > /dev/null 2>&1; then
+        printf "  - [ ] {{DEPENDENCY}} ${_COLOR_RED}not found, please install it!${_COLOR_NC}\n"
+        FAIL=1
+    else
+        printf "  - [x] {{DEPENDENCY}}\n"
+    fi
+
+    if [ $FAIL -eq 1 ]; then
+        exit 1
+    fi
+
+# Plan the terraform configuration for TARGET
+plan TARGET:
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    cd {{TARGET}}
+
+    {{TERRAFORM_BIN}} init
+    {{TERRAFORM_BIN}} plan -var-file={{TF_VARIABLES}} -out={{TF_PLAN}}
+
+# Apply the terraform configuration for TARGET
+apply TARGET:
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d {{TARGET}} ]; then
+        echo "{{TARGET}} does not exist"
+        exit 1
+    fi
+
+    cd {{TARGET}}
+
+    {{TERRAFORM_BIN}} apply {{TF_PLAN}}

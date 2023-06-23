@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  watchtower:
+    image: docker.io/containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/hostname:/etc/hostname:ro
+    env_file:
+      - /etc/global.env
+    environment:
+      WATCHTOWER_CLEANUP: true
+      WATCHTOWER_TIMEOUT: 30
+      WATCHTOWER_NOTIFICATION_REPORT: true
+      WATCHTOWER_NOTIFICATION_LEVEL: info

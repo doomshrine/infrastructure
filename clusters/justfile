@@ -1,0 +1,250 @@
+#!/usr/bin/env -S just --justfile
+# Shebang above is not necessary, but it allows you to run this file directly
+
+set dotenv-load
+
+GITHUB_USER := "miriady"
+INFRA_REPO := "infra-repo"
+USER := "ansible"
+# this is expanded only when the variable is used!
+SSH_KEY := "${HOME}/.ssh/ansible"
+
+# keep it in quotes, but also inside a pair of parentheses, to make it an array
+SERVERS := "('172.16.2.1' '172.16.2.2' '172.16.2.3')"
+AGENTS := "('172.16.2.4' '172.16.2.5')"
+
+# Check if all dependencies are installed
+dependencies:
+    @just _check cilium
+    @just _check flux
+    @just _check kubectl
+    @just _check k3sup
+
+_check DEPENDENCY:
+    #!/usr/bin/env bash
+    set -e
+
+    if ! command -v tput > /dev/null 2>&1; then
+        _COLOR_NC=''
+        _COLOR_RED=''
+    else
+        _COLOR_NC="$(tput sgr0)"
+        _COLOR_RED="$(tput setaf 1)"
+    fi
+
+    FAIL=0
+    if ! command -v {{DEPENDENCY}} > /dev/null 2>&1; then
+        printf "  - [ ] {{DEPENDENCY}} ${_COLOR_RED}not found, please install it!${_COLOR_NC}\n"
+        FAIL=1
+    else
+        printf "  - [x] {{DEPENDENCY}}\n"
+    fi
+
+    if [ $FAIL -eq 1 ]; then
+        exit 1
+    fi
+
+# Uninstall k3s
+prune: _k3s_pre
+    #!/usr/bin/env bash
+    set -e
+
+    SERVERS={{SERVERS}}
+    AGENTS={{AGENTS}}
+
+    for AGENT in "${AGENTS[@]}"; do
+        ssh -i {{SSH_KEY}} {{USER}}@"${AGENT}" k3s-agent-uninstall.sh
+    done
+
+    for SERVER in "${SERVERS[@]}"; do
+        ssh -i {{SSH_KEY}} {{USER}}@"${SERVER}" k3s-uninstall.sh
+    done
+
+# Install k3s on servers and join them to a cluster using k3sup
+k3s: dependencies _k3s_pre _k3s_server _k3s_agent
+
+_k3s_pre:
+    #!/usr/bin/env bash
+    set -e
+
+    SERVERS={{SERVERS}}
+
+    if [[ "${#SERVERS[@]}" -lt 3 ]]; then
+        echo "You must have at least 3 servers to install k3s HA"
+        exit 1
+    fi
+
+    if [ -z "{{USER}}" ]; then
+        echo "USER is not set"
+        exit 1
+    fi
+
+    if [ -z "{{SSH_KEY}}" ]; then
+        echo "SSH_KEY is not set"
+        exit 1
+    fi
+
+_k3s_server:
+    #!/usr/bin/env bash
+    set -e
+
+    SERVERS={{SERVERS}}
+
+    DEFAULT_EXTRA_ARGS=(
+        "--flannel-backend=none"
+        "--cluster-cidr=10.10.0.0/16"
+        "--disable-network-policy"
+        "--disable-helm-controller"
+        "--disable=traefik"
+        "--disable=servicelb"
+    )
+
+    CONTROL_PLANE="${SERVERS[0]}"
+    # remove first server from array
+    SERVERS=("${SERVERS[@]:1}")
+
+    EXTRA_ARGS=(${DEFAULT_EXTRA_ARGS[@]} "--node-ip=${CONTROL_PLANE}")
+    echo "###################################"
+    echo "###################################"
+    echo "${CONTROL_PLANE}"
+    echo "###################################"
+    echo "###################################"
+
+    mkdir -p "${HOME}/.kube/config.d/"
+    rm -rf "${HOME}/.kube/config.d/k3s-ha"
+
+    k3sup install \
+        --ssh-key="{{SSH_KEY}}" \
+        --ip="${CONTROL_PLANE}" \
+        --user="{{USER}}" \
+        --sudo \
+        --cluster \
+        --tls-san="k3s-lb" \
+        --k3s-channel=stable \
+        --k3s-extra-args "${EXTRA_ARGS[*]}" \
+        --local-path "${HOME}/.kube/config.d/k3s-ha" \
+        --context=k3s-ha \
+        --merge
+
+    for SERVER in "${SERVERS[@]}"; do
+        EXTRA_ARGS=(${DEFAULT_EXTRA_ARGS[@]} "--node-ip=${SERVER}")
+
+        echo "###################################"
+        echo "###################################"
+        echo "${SERVER}"
+        echo "###################################"
+        echo "###################################"
+
+        k3sup join \
+            --ssh-key="{{SSH_KEY}}" \
+            --ip="${SERVER}" \
+            --user="{{USER}}" \
+            --sudo \
+            --server \
+            --k3s-channel=stable \
+            --server-ip="${CONTROL_PLANE}" \
+            --server-user="{{USER}}" \
+            --sudo \
+            --k3s-extra-args "${EXTRA_ARGS[*]}"
+    done
+
+_k3s_agent:
+    #!/usr/bin/env bash
+    set -e
+
+    AGENTS={{AGENTS}}
+    SERVERS={{SERVERS}}
+    CONTROL_PLANE="${SERVERS[0]}"
+
+    DEFAULT_EXTRA_ARGS=()
+
+    for AGENT in "${AGENTS[@]}"; do
+        EXTRA_ARGS=(${DEFAULT_EXTRA_ARGS[@]} "--node-ip=${AGENT}")
+
+        echo "###################################"
+        echo "###################################"
+        echo "${AGENT}"
+        echo "###################################"
+        echo "###################################"
+
+        k3sup join \
+            --ssh-key="{{SSH_KEY}}" \
+            --ip="${AGENT}" \
+            --user="{{USER}}" \
+            --sudo \
+            --k3s-channel=stable \
+            --server-ip="${CONTROL_PLANE}" \
+            --server-user="{{USER}}" \
+            --sudo \
+            --k3s-extra-args "${EXTRA_ARGS[*]}"
+    done
+
+_k3s_is_ready:
+    #!/usr/bin/env bash
+    set -e
+
+    for i in {1..5}; do
+        if kubectl wait --for=condition=Ready nodes --all --timeout=600s; then
+            break
+        else
+            echo "Retrying in 5 seconds ($i out of 5)..."
+            sleep 5
+        fi
+    done
+
+# Install cilium on kubernetes cluster
+cilium: dependencies
+    #!/usr/bin/env bash
+    set -e
+
+    export KUBECONFIG="${HOME}/.kube/config.d/k3s-ha"
+
+    cilium install --wait
+    cilium hubble enable --ui --wait
+
+# Install kured on kubernetes cluster
+kured:
+    kubectl --kubeconfig "${HOME}/.kube/config.d/k3s-ha" apply -f ./generated/kured.yaml
+
+
+_fetch_kured_manifest:
+    #!/usr/bin/env bash
+    set -e
+
+    mkdir -p ./generated/
+
+    latest=$(curl -s https://api.github.com/repos/kubereboot/kured/releases | jq -r '.[0].tag_name')
+    curl -fsSL "https://github.com/kubereboot/kured/releases/download/$latest/kured-$latest-dockerhub.yaml" > ./generated/kured.yaml
+
+kured_configure TOKEN: _fetch_kured_manifest
+    #!/usr/bin/env bash
+    set -e
+
+    mkdir -p ./generated/
+
+    latest=$(curl -s https://api.github.com/repos/kubereboot/kured/releases | jq -r '.[0].tag_name')
+    curl -fsSL "https://github.com/kubereboot/kured/releases/download/$latest/kured-$latest-dockerhub.yaml" > ./generated/kured.yaml
+
+    cat >> ./generated/kured.yaml << EOF
+                - --notify-url="{{TOKEN}}"
+                - --reboot-sentinel-command="sh -c '! needs-restarting --reboothint'"
+    EOF
+
+
+# Install and configure flux on kubernetes cluster
+flux PATH: dependencies
+    #!/usr/bin/env bash
+    set -e
+
+    if [ ! -d "{{PATH}}" ]; then
+        echo "{{PATH}} does not exist"
+        exit 1
+    fi
+
+    flux check --pre
+
+    flux bootstrap github \
+        --owner="{{GITHUB_USER}}" \
+        --repository="{{INFRA_REPO}}" \
+        --branch=main \
+        --path="{{PATH}}"

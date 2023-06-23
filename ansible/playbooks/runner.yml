@@ -1,0 +1,50 @@
+- name: Configure runner
+  hosts: runner
+  become: true
+
+  tasks:
+    - name: Check if the 'max_concurrent_jobs' is defined
+      when: max_concurrent_jobs is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'max_concurrent_jobs'
+
+    - name: Create directory for storing docker-compose files
+      ansible.builtin.file:
+        path: "/etc/ansible/templates/{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0755
+        recurse: true
+      loop:
+        - woodpecker_runner
+
+    - name: Copy docker-compose files from local to remote
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}/docker-compose.yml"
+        dest: "/etc/ansible/templates/{{ item }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - woodpecker_runner
+
+    - name: Create env file with additional variables
+      ansible.builtin.copy:
+        content: |
+          WOODPECKER_MAX_PROCS={{ max_concurrent_jobs }}
+          WOODPECKER_HOSTNAME={{ inventory_hostname }}
+        dest: "/etc/ansible/templates/{{ item }}/local.env"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      loop:
+        - woodpecker_runner
+
+    - name: Start all docker-compose services
+      ansible.builtin.command:
+        chdir: "/etc/ansible/templates/{{ item }}"
+        cmd: docker compose up -d --force-recreate
+      loop:
+        - woodpecker_runner
+

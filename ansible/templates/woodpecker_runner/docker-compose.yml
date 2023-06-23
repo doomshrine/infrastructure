@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  woodpecker-agent:
+    image: docker.io/woodpeckerci/woodpecker-agent:latest
+    container_name: woodpecker-agent
+    command: agent
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - local.env
+    environment:
+      - WOODPECKER_SERVER=connect.woodpecker.ci.shanduur.com:443
+      - WOODPECKER_GRPC_SECURE=true
+      - WOODPECKER_GRPC_VERIFY=true
+      - WOODPECKER_LOG_LEVEL=debug
+      - WOODPECKER_DEBUG_NOCOLOR=true

@@ -1,0 +1,11 @@
+http:
+  routers:
+    jenkins:
+      rule: "Host(`gocd.ci.shanduur.com`)"
+      service: gocd
+
+  services:
+    gocd:
+      loadBalancer:
+        servers:
+          - url: "http://gocd:8153"

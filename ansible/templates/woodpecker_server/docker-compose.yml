@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  woodpecker-server:
+    image: docker.io/woodpeckerci/woodpecker-server:latest
+    restart: always
+    container_name: woodpecker
+    networks:
+      - proxy
+    expose:
+      - 8000
+      - 9000
+    volumes:
+      - woodpecker-server-data:/var/lib/woodpecker/
+    env_file:
+      - local.env
+    environment:
+      - WOODPECKER_OPEN=true
+      - WOODPECKER_HOST=https://woodpecker.ci.shanduur.com
+      - WOODPECKER_GITHUB=true
+      - WOODPECKER_ADMIN=shanduur,niesmaczne,shanduur-auto
+      - WOODPECKER_LOG_LEVEL=debug
+      - WOODPECKER_DEBUG_NOCOLOR=true
+    labels:
+      - "traefik.enable=true"
+
+      # Rules for the web endpoint (used by the user)
+      - "traefik.http.routers.woodpecker.rule=Host(`woodpecker.ci.shanduur.com`)"
+      - "traefik.http.routers.woodpecker.entrypoints=websecure"
+      - "traefik.http.routers.woodpecker.service=woodpecker"
+      - "traefik.http.routers.woodpecker.tls=true"
+      - "traefik.http.routers.woodpecker.tls.certresolver=le"
+      # service for the web endpoint
+      - "traefik.http.services.woodpecker.loadbalancer.server.port=8000"
+
+      # Rules for the API endpoint (used by the agent)
+      - "traefik.http.routers.woodpecker_api.rule=Host(`connect.woodpecker.ci.shanduur.com`)"
+      - "traefik.http.routers.woodpecker_api.entrypoints=websecure"
+      - "traefik.http.routers.woodpecker_api.service=woodpecker_api"
+      - "traefik.http.routers.woodpecker_api.tls=true"
+      - "traefik.http.routers.woodpecker_api.tls.certresolver=le"
+      # service for the API endpoint
+      - "traefik.http.services.woodpecker_api.loadbalancer.server.port=9000"
+      - "traefik.http.services.woodpecker_api.loadbalancer.server.scheme=h2c"
+
+volumes:
+  woodpecker-server-data:
+
+networks:
+  proxy:
+    name: proxy
+    external: true

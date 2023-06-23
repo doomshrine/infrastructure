@@ -1,0 +1,57 @@
+version: '3.9'
+
+services:
+  traefik:
+    image: docker.io/library/traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "6443:6443"
+    networks:
+      - proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/traefik:/etc/traefik
+      - certificates:/certificates
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP Routers
+      - "traefik.http.routers.dashboard.rule=Host(`shanduur.com`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=le"
+
+      # HTTP Middlewares
+      - "traefik.http.middlewares.dashboard.basicauth.users=admin:$$2y$$05$$2ZDKuJETTFrYZBiu.u0JfuP6pkqv7lVivPaclzdHjqoAf8pG0Xhfy"
+      - "traefik.http.middlewares.dashboard.basicauth.removeheader=true"
+
+  whoami:
+    image: docker.io/traefik/whoami
+    restart: always
+    expose:
+      - 80
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP Routers
+      - "traefik.http.routers.whoami.rule=Host(`shadnuur.com`) && PathPrefix(`/whoami`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+      - "traefik.http.routers.whoami.middlewares=whoami"
+
+      # HTTP Middlewares
+      - "traefik.http.middlewares.whoami.basicauth.users=admin:$$2y$$05$$2ZDKuJETTFrYZBiu.u0JfuP6pkqv7lVivPaclzdHjqoAf8pG0Xhfy"
+      - "traefik.http.middlewares.whoami.basicauth.removeheader=true"
+
+networks:
+  proxy:
+    name: proxy
+
+volumes:
+  certificates:
+    name: certificates

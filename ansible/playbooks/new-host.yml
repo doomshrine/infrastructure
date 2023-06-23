@@ -1,0 +1,215 @@
+- name: Create ansible user on all hosts
+  hosts: new
+
+  tasks:
+    - name: Check if the 'new_user' is defined
+      when: new_user is not defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'new_user'
+
+    - name: Create user
+      when: ansible_os_family == "RedHat"
+      become: true
+      ansible.builtin.user:
+        name: "{{ new_user }}"
+        state: present
+        groups: wheel
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Create user
+      when: ansible_os_family == "Debian"
+      become: true
+      ansible.builtin.user:
+        name: "{{ new_user }}"
+        state: present
+        groups: sudo
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Create sudoers.d/ansible file with appropriate contents
+      become: true
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ new_user }}"
+        content: |
+          {{ new_user }} ALL=(ALL) NOPASSWD: ALL
+        mode: 0440
+        owner: root
+        group: root
+
+    - name: Ensure that the ansible user has a .ssh directory
+      become: true
+      ansible.builtin.file:
+        path: "/home/{{ new_user }}/.ssh"
+        state: directory
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: 0700
+
+    - name: Ensure that the user has a .ssh/authorized_keys file
+      become: true
+      ansible.builtin.copy:
+        dest: "/home/{{ new_user }}/.ssh/authorized_keys"
+        content: "{{ lookup('file', '~/.ssh/ansible.pub') }}"
+        mode: 0600
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+
+- hosts: new
+  become: true
+
+  tasks:
+    - name: Ensure that 'hostname' is defined
+      ansible.builtin.fail:
+        msg: "Bailing out. This play requires 'hostname'"
+      when: hostname is undefined
+
+    - name: Set new hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}"
+
+- name: Install Tailscale on all hosts
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Install Tailscale through the install script
+      when: tailscale_key is defined
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://tailscale.com/install.sh | sh
+
+    - name: Authenticate Tailscale with the given key
+      when: tailscale_key is defined
+      ansible.builtin.command:
+        cmd: "tailscale up --authkey={{ tailscale_key }}"
+
+    - name: Ensure that tailscale daemon is running
+      when: tailscale_key is defined
+      ansible.builtin.service:
+        name: tailscaled
+        enabled: true
+        state: started
+
+- name: Set static route
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Check if the 'subnet' is defined
+      when: subnet is not defined and static_route is defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'subnet'
+    - name: Check if the 'gateway' is defined
+      when: gateway is not defined and static_route is defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'gateway'
+    - name: Check if the 'interface' is defined
+      when: interface is not defined and static_route is defined
+      ansible.builtin.fail:
+        msg: Bailing out. This play requires 'interface'
+
+    - name: Set static route
+      when: static_route is defined
+      ansible.builtin.command:
+        cmd: 'nmcli connection modify {{ interface }} +ipv4.routes "{{ subnet }} {{ gateway }}"'
+
+- name: Install and configure dnf-automatic
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Install dnf-automatic
+      when: ansible_os_family == "RedHat"
+      ansible.builtin.yum:
+        name:
+          - dnf-automatic
+          - yum-utils
+        state: present
+        update_cache: true
+
+    - name: Enable dnf-automatic
+      when: ansible_os_family == "RedHat"
+      ansible.builtin.service:
+        name: dnf-automatic-install
+        enabled: true
+        state: started
+      register: result
+      until: "result is not failed"
+      retries: 3
+      delay: 5
+
+- name: Set new IP
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Set new IP
+      when: >
+        ipv4 is defined and
+        netmask is defined and
+        interface is defined and
+        gateway is defined and
+        ipv4 not in ansible_all_ipv4_addresses
+      community.general.nmcli:
+        conn_name: "{{ interface }}"
+        ip4: "{{ ipv4 }}/{{ netmask }}"
+        gw4: "{{ gateway }}"
+        method4: manual
+        state: present
+
+- name: Resize partition
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Resize partition
+      when: >
+        disk_device is defined and
+        partition_number is defined and
+        partition_size is defined
+      community.general.parted:
+        device: "{{ disk_device }}"
+        number: "{{ partition_number }}"
+        part_end: "{{ partition_size }}%"
+        resize: true
+
+    - name: Resize filesystem
+      when: >
+        disk_device is defined and
+        partition_number is defined and
+        partition_size is defined and
+        ansible_os_family == "RedHat"
+      ansible.builtin.command:
+        cmd: "xfs_growfs -d {{ disk_device }}{{ partition_number }}"
+
+    - name: Resize filesystem
+      when: >
+        disk_device is defined and
+        partition_number is defined and
+        partition_size is defined and
+        ansible_os_family == "Debian"
+      ansible.builtin.command:
+        cmd: "resize2fs {{ disk_device }}{{ partition_number }}"
+
+    - name: Read device information (always use unit when probing)
+      community.general.parted:
+        device: "{{ disk_device }}"
+        number: "{{ partition_number }}"
+        unit: GiB
+      register: partition_info
+
+    - name: Print partition information
+      ansible.builtin.debug:
+        msg: "{{ partition_info }}"
+
+- name: Finally reboot the host
+  hosts: new
+  become: true
+
+  tasks:
+    - name: Reboot the host
+      when: skip_reboot is undefined
+      ignore_unreachable: true
+      ignore_errors: true
+      ansible.builtin.shell:
+        cmd: sleep 5 && reboot
