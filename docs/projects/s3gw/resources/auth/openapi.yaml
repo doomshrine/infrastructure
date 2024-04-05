@@ -1,0 +1,113 @@
+openapi: 3.0.0
+info:
+  title: Authentication API
+  version: 1.0.0
+  description: |
+    This API provides endpoints for user authentication and management.
+
+paths:
+  /auth/users:
+    post:
+      summary: Create user
+      description: Creates a new user with hashed password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '201':
+          description: User created successfully
+    get:
+      summary: Get all users
+      description: Retrieves a list of all users.
+      responses:
+        '200':
+          description: List of users retrieved successfully
+
+  /auth/users/{id}:
+    get:
+      summary: Get user by ID
+      description: Retrieves a user by their unique ID.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User retrieved successfully
+        '404':
+          description: User not found
+    delete:
+      summary: Delete user by ID
+      description: Deletes a user by their unique ID.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: User deleted successfully
+        '404':
+          description: User not found
+    put:
+      summary: Update user by ID
+      description: Updates a user by their unique ID.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '200':
+          description: User updated successfully
+        '404':
+          description: User not found
+
+  /auth/users/{id}/token:
+    post:
+      summary: Generate new token for user
+      description: Generates a new authentication token for a user.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Token generated successfully
+    delete:
+      summary: Delete all tokens for user
+      description: Deletes all authentication tokens associated with a user.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: Tokens deleted successfully
+        '404':
+          description: User not found
+
+components:
+  schemas:
+    UserInput:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          description: Hashed password for user authentication.
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique identifier for a user. Should be a UUID.
+      example: "01234567-89ab-cdef-0123-456789abcdef"
