@@ -105,12 +105,12 @@ build-docs VERSION:
 
     if git show-ref --quiet refs/heads/gh-pages ; then
         if [[ "${prerelease}" == "true" ]]; then
-            mike deploy --push --update-aliases --rebase "${trimmed}"
+            mike deploy --push --update-aliases "${trimmed}"
         else
-            mike deploy --push --update-aliases --rebase "${trimmed}" latest
+            mike deploy --push --update-aliases "${trimmed}" latest
         fi
     else
-        mike deploy --push --update-aliases --rebase "${trimmed}" latest
+        mike deploy --push --update-aliases "${trimmed}" latest
         mike set-default --push latest
     fi
 
