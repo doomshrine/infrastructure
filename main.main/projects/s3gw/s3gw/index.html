@@ -395,6 +395,14 @@
     </label>
 <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
 <li class="md-nav__item">
+<a class="md-nav__link" href="#flow">
+<span class="md-ellipsis">
+      Flow
+    </span>
+</a>
+<nav aria-label="Flow" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
 <a class="md-nav__link" href="#getting-data-from-storage">
 <span class="md-ellipsis">
       Getting data from storage
@@ -407,6 +415,27 @@
       Creating new API Key
     </span>
 </a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#data">
+<span class="md-ellipsis">
+      Data
+    </span>
+</a>
+<nav aria-label="Data" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#relations">
+<span class="md-ellipsis">
+      Relations
+    </span>
+</a>
+</li>
+</ul>
+</nav>
 </li>
 </ul>
 </nav>
@@ -484,6 +513,14 @@
     </label>
 <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
 <li class="md-nav__item">
+<a class="md-nav__link" href="#flow">
+<span class="md-ellipsis">
+      Flow
+    </span>
+</a>
+<nav aria-label="Flow" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
 <a class="md-nav__link" href="#getting-data-from-storage">
 <span class="md-ellipsis">
       Getting data from storage
@@ -499,13 +536,37 @@
 </li>
 </ul>
 </nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#data">
+<span class="md-ellipsis">
+      Data
+    </span>
+</a>
+<nav aria-label="Data" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#relations">
+<span class="md-ellipsis">
+      Relations
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
 </div>
 </div>
 </div>
 <div class="md-content" data-md-component="content">
 <article class="md-content__inner md-typeset">
 <h1 id="s3-gateway">S3 Gateway</h1>
-<h2 id="getting-data-from-storage">Getting data from storage</h2>
+<p>The S3 Gateway is a service designed to interact with a storage system (likely an S3-compatible storage) and a PostgreSQL database. It facilitates operations such as retrieving data from storage and managing API keys for accessing the system.</p>
+<h2 id="flow">Flow</h2>
+<h3 id="getting-data-from-storage">Getting data from storage</h3>
+<p>This sequence diagram illustrates the process of a client requesting data from storage via the S3 Gateway. It involves the gateway checking if the provided API key is authorized to access the requested bucket, querying PostgreSQL for authorization, and retrieving the requested data from storage.</p>
 <div class="mermaid">sequenceDiagram
     actor Client
     participant S3 Gateway
@@ -519,7 +580,8 @@
         PostgreSQL--&gt;&gt;-S3 Gateway: returns &lt;data&gt;
     S3 Gateway--&gt;&gt;-Client: returns &lt;data&gt;
 </div>
-<h2 id="creating-new-api-key">Creating new API Key</h2>
+<h3 id="creating-new-api-key">Creating new API Key</h3>
+<p>This sequence diagram demonstrates the process of a client requesting to create a new API key via the S3 Gateway. It involves the gateway generating and saving a new API token in the PostgreSQL database and returning the generated token to the client.</p>
 <div class="mermaid">sequenceDiagram
     actor Client
     participant S3 Gateway
@@ -529,6 +591,64 @@
         S3 Gateway-&gt;&gt;+PostgreSQL: generate and save &lt;API TOKEN&gt;
         PostgreSQL--&gt;&gt;-S3 Gateway: returns &lt;API TOKEN&gt;
     S3 Gateway--&gt;&gt;-Client: returns &lt;API TOKEN&gt;
+</div>
+<h2 id="data">Data</h2>
+<h3 id="relations">Relations</h3>
+<p>This class diagram represents the database schema of the project. It includes the following entities:
+- <strong>Users</strong>: Represents users of the system with attributes such as <code>user_id</code>, <code>username</code>, <code>password_hash</code>, and <code>created_at</code>.
+- <strong>API_Keys</strong>: Represents API keys associated with users, including attributes such as <code>api_key_id</code>, <code>user_id</code>, <code>api_key_hash</code>, and <code>created_at</code>.
+- <strong>Buckets</strong>: Represents storage buckets with attributes such as <code>bucket_id</code>, <code>bucket_name</code>, and <code>created_at</code>.
+- <strong>Objects</strong>: Represents objects stored within buckets with attributes such as <code>object_id</code>, <code>bucket_id</code>, <code>object_version</code>, <code>object_key</code>, <code>object_data</code>, <code>object_data_checksum</code>, and <code>created_at</code>.
+- <strong>Authorisations</strong>: Represents authorizations for accessing buckets with attributes such as <code>auth_id</code>, <code>api_key_id</code>, <code>bucket_id</code>, and <code>created_at</code>.</p>
+<p>The relationships between these entities are depicted as follows:
+- Users can have multiple API keys (<code>One [User] to Many [API_Keys]</code>).
+- Users can be associated with multiple buckets, and buckets can be associated with multiple users (<code>Many [Users] to Many [Buckets]</code>).
+- Each bucket can contain multiple objects (<code>One [Bucket] to Many [Objects]</code>).
+- Each API key can have multiple authorizations (<code>One [API_Key] to Many [Authorizations]</code>).
+- Many authorizations can be associated with one bucket (<code>Many [Authorizations] to One [Bucket]</code>).</p>
+<div class="mermaid">classDiagram
+    class Users {
+        +uuid user_id: primary_key, autogenerated, unique
+        +string username: unique
+        +string password_hash
+        +timestamp created_at: autogenerated
+    }
+
+    class API_Keys {
+        +int api_key_id: primary_key, autogenerated, unique
+        +uuid user_id: foreign_key[Users]
+        +string api_key_hash: unique
+        +timestamp created_at: autogenerated
+    }
+
+    class Buckets {
+        +int bucket_id: primary_key, autogenerated, unique
+        +string bucket_name: unique
+        +timestamp created_at: autogenerated
+    }
+
+    class Objects {
+        +int object_id: primary_key, autogenerated, unique
+        +int bucket_id: foreign_key[Buckets]
+        +int object_version
+        +string object_key
+        +bytes object_data
+        +sha256 object_data_checksum
+        +timestamp created_at: autogenerated
+    }
+
+    class Authorisations {
+        +int auth_id: primary_key, autogenerated, unique
+        +int api_key_id: foreign_key[API_Keys]
+        +int bucket_id: foreign_key[Buckets]
+        +timestamp created_at: autogenerated
+    }
+
+    Users "1" &lt;--&gt; "N" API_Keys : "One [User] to Many [API_Keys]"
+    Users "N" &lt;--&gt; "N" Buckets : "Many [Users] to Many [Buckets]"
+    Buckets "1" &lt;--&gt; "N" Objects : "One [Bucket] to Many [Objects]"
+    API_Keys "1" &lt;--&gt; "N" Authorisations : "One [API_Key] to Many [Authorizations]"
+    Authorisations "N" &lt;--&gt; "1" Buckets : "Many [Authorization] to One [Bucket]"
 </div>
 </article>
 </div>
