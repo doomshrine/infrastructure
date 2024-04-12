@@ -84,7 +84,7 @@ build-docs VERSION:
     version="{{VERSION}}"
 
     # Determine if this is a prerelease version
-    if echo "${version}" | grep -E -- "-(alpha|beta|rc)\.[0-9]+" > /dev/null; then
+    if echo "${version}" | grep -E -- "(-(alpha|beta|rc)\.[0-9]+)|(^main$)" > /dev/null; then
         prerelease="true"
     else
         prerelease="false"
