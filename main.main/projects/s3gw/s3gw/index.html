@@ -5,8 +5,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
-<link href="../aws-s3-api/" rel="prev"/>
-<link href="../../../terraform/maas-22.04/" rel="next"/>
+<link href="../../../packer-templates/vyos/" rel="prev"/>
+<link href="../auth-api/" rel="next"/>
 <link href="../../../assets/images/favicon.png" rel="icon"/>
 <meta content="mkdocs-1.5.3, mkdocs-material-9.5.17" name="generator"/>
 <title>S3 Gateway - Infrastructure</title>
@@ -157,7 +157,7 @@
         </a>
 </li>
 <li class="md-tabs__item md-tabs__item--active">
-<a class="md-tabs__link" href="../auth-api/">
+<a class="md-tabs__link" href="./">
           
   
   Projects
@@ -361,20 +361,6 @@
             S3gw
           </label>
 <ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../auth-api/">
-<span class="md-ellipsis">
-    Auth API
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../aws-s3-api/">
-<span class="md-ellipsis">
-    AWS S3 API
-  </span>
-</a>
-</li>
 <li class="md-nav__item md-nav__item--active">
 <input class="md-nav__toggle md-toggle" id="__toc" type="checkbox"/>
 <label class="md-nav__link md-nav__link--active" for="__toc">
@@ -439,6 +425,20 @@
 </li>
 </ul>
 </nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../auth-api/">
+<span class="md-ellipsis">
+    Auth API
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../aws-s3-api/">
+<span class="md-ellipsis">
+    AWS S3 API
+  </span>
+</a>
 </li>
 </ul>
 </nav>
@@ -594,18 +594,22 @@
 </div>
 <h2 id="data">Data</h2>
 <h3 id="relations">Relations</h3>
-<p>This class diagram represents the database schema of the project. It includes the following entities:
-- <strong>Users</strong>: Represents users of the system with attributes such as <code>user_id</code>, <code>username</code>, <code>password_hash</code>, and <code>created_at</code>.
-- <strong>API_Keys</strong>: Represents API keys associated with users, including attributes such as <code>api_key_id</code>, <code>user_id</code>, <code>api_key_hash</code>, and <code>created_at</code>.
-- <strong>Buckets</strong>: Represents storage buckets with attributes such as <code>bucket_id</code>, <code>bucket_name</code>, and <code>created_at</code>.
-- <strong>Objects</strong>: Represents objects stored within buckets with attributes such as <code>object_id</code>, <code>bucket_id</code>, <code>object_version</code>, <code>object_key</code>, <code>object_data</code>, <code>object_data_checksum</code>, and <code>created_at</code>.
-- <strong>Authorisations</strong>: Represents authorizations for accessing buckets with attributes such as <code>auth_id</code>, <code>api_key_id</code>, <code>bucket_id</code>, and <code>created_at</code>.</p>
-<p>The relationships between these entities are depicted as follows:
-- Users can have multiple API keys (<code>One [User] to Many [API_Keys]</code>).
-- Users can be associated with multiple buckets, and buckets can be associated with multiple users (<code>Many [Users] to Many [Buckets]</code>).
-- Each bucket can contain multiple objects (<code>One [Bucket] to Many [Objects]</code>).
-- Each API key can have multiple authorizations (<code>One [API_Key] to Many [Authorizations]</code>).
-- Many authorizations can be associated with one bucket (<code>Many [Authorizations] to One [Bucket]</code>).</p>
+<p>This class diagram represents the database schema of the project. It includes the following entities:</p>
+<ul>
+<li><strong>Users</strong>: Represents users of the system with attributes such as <code>user_id</code>, <code>username</code>, <code>password_hash</code>, and <code>created_at</code>.</li>
+<li><strong>API_Keys</strong>: Represents API keys associated with users, including attributes such as <code>api_key_id</code>, <code>user_id</code>, <code>api_key_hash</code>, and <code>created_at</code>.</li>
+<li><strong>Buckets</strong>: Represents storage buckets with attributes such as <code>bucket_id</code>, <code>bucket_name</code>, and <code>created_at</code>.</li>
+<li><strong>Objects</strong>: Represents objects stored within buckets with attributes such as <code>object_id</code>, <code>bucket_id</code>, <code>object_version</code>, <code>object_key</code>, <code>object_data</code>, <code>object_data_checksum</code>, and <code>created_at</code>.</li>
+<li><strong>Authorisations</strong>: Represents authorizations for accessing buckets with attributes such as <code>auth_id</code>, <code>api_key_id</code>, <code>bucket_id</code>, and <code>created_at</code>.</li>
+</ul>
+<p>The relationships between these entities are depicted as follows:</p>
+<ul>
+<li>Users can have multiple API keys (<code>One [User] to Many [API_Keys]</code>).</li>
+<li>Users can be associated with multiple buckets, and buckets can be associated with multiple users (<code>Many [Users] to Many [Buckets]</code>).</li>
+<li>Each bucket can contain multiple objects (<code>One [Bucket] to Many [Objects]</code>).</li>
+<li>Each API key can have multiple authorizations (<code>One [API_Key] to Many [Authorizations]</code>).</li>
+<li>Many authorizations can be associated with one bucket (<code>Many [Authorizations] to One [Bucket]</code>).</li>
+</ul>
 <div class="mermaid">classDiagram
     class Users {
         +uuid user_id: primary_key, autogenerated, unique
